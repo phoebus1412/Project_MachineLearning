@@ -1,0 +1,80 @@
+---
+title: "Predictive Classifiers on Human's Activities"
+author: "phoebus.ZOU"
+date: "Wednesday, March 18, 2015"
+output: html_document
+---
+Acknowledgement:Data for this report come from 'Human Activity Recognition Project' conducted by GroupWare@LES, Thanks for their permission to use the data.For more information, please visit http://groupware.les.inf.puc-rio.br/har. 
+
+Overview:This report introduces an implementation to predict human's activities based on random forests algorithm. In this report, data were collected from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. Besides, I also included cross validation and error analysis in this report. 
+
+Data Processing
+```{r}
+download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+",destfile="training.csv")
+download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+",destfile="testing.csv")
+training<-read.csv("training.csv")
+testing<-read.csv("testing.csv")
+```
+In order to measure what kind of a activity one is peroforming, we usually consider three dimensional positions and accelerators of some parts of bodies. so I consider implementing our algorithm through a subset of observed variables. Noticed that in some predictors, large observations are NULL and some predictors are distributed in a small range. Then,I will use nearZeroVar() function in caert package to delete such predictors as they are not affecting much.
+```{r}
+inTrain<-createDataPartition(y=training$classe,p=0.85,list=FALSE)
+trainCV<-training[inTrain,]
+testCV<-training[-inTrain,]
+zero<-nearZeroVar(training)
+trainCln <- trainCV[-zero]
+testCln<- testCV[-zero]
+testingCln<-testing[-zero]
+```
+In the remaining predictors, I find out that many observations are empty, this may lead to some problems in classification,therefore,I use preprocess() to impute these missing values.And do a deeper predictor selection.I removed non-numerical predictor as they more or less affect test results.
+```{r}
+numericalIndex = which(lapply(trainCln,class) %in% c('numeric') )
+modelImpute <- preProcess(trainCln[,numericalIndex], method=c('knnImpute'))
+trainAll <- cbind(predict(modelImpute, trainCln[,numericalIndex]),trainCln$classe)
+testAll <- cbind(predict(modelImpute, testCln[,numericalIndex]),testCln$classe)
+testingFinal <- predict(modelImpute, testingCln[,numericalIndex])
+names(trainAll)[ncol(trainAll)] <- 'classe'
+names(testAll)[ncol(testAll)] <- 'classe'
+```
+
+Modeling
+Consider that I have a lot of observations,here I adopt random forest as my training model.
+```{r,cache=TRUE}
+modelrf<-randomForest(classe~.,data=trainAll,ntree=400,mtry=33)
+```
+
+Cross Validation
+I have prepared a cross validation set when processing raw data.Now I can calculate my model's accuracy.
+In-sample accuracy
+```{r,cache=TRUE}
+inAccuracy<-predict(modelrf,trainAll) 
+print(confusionMatrix(inAccuracy,trainAll$classe))
+```
+The in sample accuracy is 100%, which means my model is bias free.
+Out-of-sample accuracy
+```{r,cache=TRUE}
+outAccuracy<- predict(modelrf,testAll) 
+print(confusionMatrix(outAccuracy,testAll$classe))
+```
+The cross validation accuracy is almost 100%, which indicates that my model is generalized enough to handle new data sets.
+
+Prediction on Given Test sets
+Result after applied my model on given test data sets is below:
+```{r}
+result <- predict(modelrf, testingFinal) 
+error<-sum(result!=testing$classe)/20
+error
+```
+Conclusion
+From the above result, error rate is 0 which means my model perfectly fits the test data sets.Above all, my model is able to distinguish what activity is performing based on observations from accelerometers on the belt, forearm, arm, and dumbell.
+
+
+
+
+
+
+
+
+
+
